@@ -41,7 +41,7 @@ impl Node<(), Payload> for UniqueNode {
                 reply.body.payload = Payload::GenerateOk { guid };
 
                 serde_json::to_writer(&mut *stdout, &reply)
-                    .context("serialize response to init")?;
+                    .context("serialize response to generate_ok")?;
 
                 stdout.write_all(b"\n").context("write trailing new line")?;
                 self.id += 1;

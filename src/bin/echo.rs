@@ -32,7 +32,7 @@ impl Node<(), Payload> for EchoNode {
                 reply.body.payload = Payload::EchoOk { echo };
 
                 serde_json::to_writer(&mut *stdout, &reply)
-                    .context("serialize response to echo")?;
+                    .context("serialize response to echo_ok")?;
 
                 stdout.write_all(b"\n").context("write trailing new line")?;
                 self.id += 1;
