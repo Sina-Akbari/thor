@@ -44,7 +44,6 @@ impl Node<(), Payload> for UniqueNode {
                     .context("serialize response to generate_ok")?;
 
                 stdout.write_all(b"\n").context("write trailing new line")?;
-                self.id += 1;
             }
             Payload::GenerateOk { .. } => bail!("received generate_ok message"),
         }

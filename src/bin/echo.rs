@@ -35,7 +35,6 @@ impl Node<(), Payload> for EchoNode {
                     .context("serialize response to echo_ok")?;
 
                 stdout.write_all(b"\n").context("write trailing new line")?;
-                self.id += 1;
             }
             Payload::EchoOk { .. } => {}
         }

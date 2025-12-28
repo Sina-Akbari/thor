@@ -52,7 +52,6 @@ impl Node<(), Payload> for BroadcastNode {
                     .context("serialize response to broadcast_ok")?;
 
                 stdout.write_all(b"\n").context("write trailing new line")?;
-                self.id += 1;
             }
             Payload::Read {} => {
                 reply.body.payload = Payload::ReadOk {
@@ -63,7 +62,6 @@ impl Node<(), Payload> for BroadcastNode {
                     .context("serialize response to read_ok")?;
 
                 stdout.write_all(b"\n").context("write trailing new line")?;
-                self.id += 1;
             }
             Payload::Topology { .. } => {
                 reply.body.payload = Payload::TopologyOk;
@@ -72,7 +70,6 @@ impl Node<(), Payload> for BroadcastNode {
                     .context("serialize response to topology_ok")?;
 
                 stdout.write_all(b"\n").context("write trailing new line")?;
-                self.id += 1;
             }
             Payload::BroadcastOk {} | Payload::ReadOk { .. } | Payload::TopologyOk => {}
         }
