@@ -27,25 +27,19 @@ impl Node<(), Payload> for UniqueNode {
     where
         Self: Sized,
     {
-        Ok(UniqueNode {
+        Ok(Self {
             node: init.node_id,
             id: 1,
         })
     }
     fn step(&mut self, input: Message<Payload>, stdout: &mut StdoutLock) -> anyhow::Result<()> {
-        match input.body.payload {
+        let mut reply = input.into_reply(Some(&mut self.id));
+
+        match reply.body.payload {
             Payload::Generate => {
                 let guid = format!("{}-{}", self.node, ulid::Ulid::new().to_string());
+                reply.body.payload = Payload::GenerateOk { guid };
 
-                let reply = Message {
-                    src: input.dst,
-                    dst: input.src,
-                    body: Body {
-                        id: Some(self.id),
-                        in_reply_to: input.body.id,
-                        payload: Payload::GenerateOk { guid },
-                    },
-                };
                 serde_json::to_writer(&mut *stdout, &reply)
                     .context("serialize response to init")?;
 
