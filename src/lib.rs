@@ -1,6 +1,6 @@
 use std::io::{BufRead, StdoutLock, Write};
 
-use anyhow::{Context, Ok};
+use anyhow::Context;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -36,8 +36,15 @@ impl<Payload> Message<Payload> {
 
         output.write_all(b"\n").context("write trailing new line")?;
 
-        Ok(())
+        anyhow::Ok(())
     }
+}
+
+#[derive(Debug, Clone)]
+pub enum Event<Payload, InjectedPayload = ()> {
+    Message(Message<Payload>),
+    Inject(InjectedPayload),
+    EOF,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -64,19 +71,29 @@ enum InitPayload {
     InitOk,
 }
 
-pub trait Node<S, Payload> {
-    fn from_init(state: S, init: Init) -> anyhow::Result<Self>
+pub trait Node<S, Payload, InjectedPayload = ()> {
+    fn from_init(
+        state: S,
+        init: Init,
+        inject: std::sync::mpsc::Sender<Event<Payload, InjectedPayload>>,
+    ) -> anyhow::Result<Self>
     where
         Self: Sized;
 
-    fn step(&mut self, input: Message<Payload>, stdout: &mut StdoutLock) -> anyhow::Result<()>;
+    fn step(
+        &mut self,
+        input: Event<Payload, InjectedPayload>,
+        stdout: &mut StdoutLock,
+    ) -> anyhow::Result<()>;
 }
 
-pub fn start_app<S, N, P>(state: S) -> anyhow::Result<()>
+pub fn start_app<S, N, P, IP>(state: S) -> anyhow::Result<()>
 where
-    P: DeserializeOwned + Serialize,
-    N: Node<S, P>,
+    P: DeserializeOwned + Send + 'static,
+    N: Node<S, P, IP>,
+    IP: Send + 'static,
 {
+    let (tx, rx) = std::sync::mpsc::channel();
     let stdin = std::io::stdin().lock();
     let mut lines = stdin.lines();
 
@@ -91,7 +108,8 @@ where
     let InitPayload::Init(init) = init_msg.body.payload else {
         panic!("first message should be init");
     };
-    let mut node: N = Node::from_init(state, init).context("could not initialize node")?;
+    let mut node: N =
+        Node::from_init(state, init, tx.clone()).context("could not initialize node")?;
 
     let mut stdout = std::io::stdout().lock();
 
@@ -105,18 +123,36 @@ where
         },
     };
 
-    serde_json::to_writer(&mut stdout, &reply).context("serialize response to generate")?;
-    stdout.write_all(b"\n").context("write trailing new line")?;
+    reply
+        .send_reply(&mut stdout)
+        .context("failed to send init_ok reply")?;
 
-    for line in lines {
-        let input = serde_json::from_str(
-            &line.expect("Maelstrom input from STDIN could not be deserialized."),
-        )
-        .context("Maelstrom input from STDIN could not be deserialized.")?;
+    drop(lines);
 
+    let th = std::thread::spawn(move || {
+        let stdin = std::io::stdin().lock();
+        let lines = stdin.lines();
+        for line in lines {
+            let line = line.context("Maelstrom input from STDIN could not be deserialized.")?;
+            let input: Message<P> = serde_json::from_str(&line)
+                .context("Maelstrom input from STDIN could not be deserialized.")?;
+
+            if let Err(_) = tx.send(Event::Message(input)) {
+                return Ok::<_, anyhow::Error>(());
+            }
+        }
+        let _ = tx.send(Event::EOF);
+        Ok(())
+    });
+
+    for input in rx {
         node.step(input, &mut stdout)
             .context("Node step function failed")?;
     }
+
+    th.join()
+        .expect("stdin thread panicked!")
+        .context("stdin thread encountered an error")?;
 
     Ok(())
 }

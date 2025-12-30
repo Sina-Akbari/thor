@@ -23,7 +23,11 @@ struct UniqueNode {
 }
 
 impl Node<(), Payload> for UniqueNode {
-    fn from_init(_state: (), init: thor::Init) -> anyhow::Result<Self>
+    fn from_init(
+        _state: (),
+        init: thor::Init,
+        _tx: std::sync::mpsc::Sender<Event<Payload>>,
+    ) -> anyhow::Result<Self>
     where
         Self: Sized,
     {
@@ -32,25 +36,32 @@ impl Node<(), Payload> for UniqueNode {
             id: 1,
         })
     }
-    fn step(&mut self, input: Message<Payload>, stdout: &mut StdoutLock) -> anyhow::Result<()> {
-        let mut reply = input.into_reply(Some(&mut self.id));
+    fn step(&mut self, input: Event<Payload>, stdout: &mut StdoutLock) -> anyhow::Result<()> {
+        match input {
+            Event::Message(input) => {
+                let mut reply = input.into_reply(Some(&mut self.id));
 
-        match reply.body.payload {
-            Payload::Generate => {
-                let guid = format!("{}-{}", self.node, ulid::Ulid::new().to_string());
-                reply.body.payload = Payload::GenerateOk { guid };
+                match reply.body.payload {
+                    Payload::Generate => {
+                        let guid = format!("{}-{}", self.node, ulid::Ulid::new().to_string());
+                        reply.body.payload = Payload::GenerateOk { guid };
 
-                reply
-                    .send_reply(&mut *stdout)
-                    .context("reply with generate_ok")?;
+                        reply
+                            .send_reply(&mut *stdout)
+                            .context("reply with generate_ok")?;
+                    }
+                    Payload::GenerateOk { .. } => {}
+                }
+
+                Ok(())
             }
-            Payload::GenerateOk { .. } => {}
+            Event::EOF | Event::Inject(..) => {
+                panic!("unsupported event received");
+            }
         }
-
-        Ok(())
     }
 }
 
 fn main() -> anyhow::Result<()> {
-    start_app::<_, UniqueNode, _>(())
+    start_app::<_, UniqueNode, _, _>(())
 }
