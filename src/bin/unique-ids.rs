@@ -1,8 +1,8 @@
 use thor::*;
 
-use std::io::{StdoutLock, Write};
+use std::io::StdoutLock;
 
-use anyhow::{Context, Ok, bail};
+use anyhow::{Context, Ok};
 use serde::{Deserialize, Serialize};
 use ulid;
 
@@ -40,12 +40,11 @@ impl Node<(), Payload> for UniqueNode {
                 let guid = format!("{}-{}", self.node, ulid::Ulid::new().to_string());
                 reply.body.payload = Payload::GenerateOk { guid };
 
-                serde_json::to_writer(&mut *stdout, &reply)
-                    .context("serialize response to generate_ok")?;
-
-                stdout.write_all(b"\n").context("write trailing new line")?;
+                reply
+                    .send_reply(&mut *stdout)
+                    .context("reply with generate_ok")?;
             }
-            Payload::GenerateOk { .. } => bail!("received generate_ok message"),
+            Payload::GenerateOk { .. } => {}
         }
 
         Ok(())

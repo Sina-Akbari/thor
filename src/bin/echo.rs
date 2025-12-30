@@ -1,6 +1,6 @@
 use thor::*;
 
-use std::io::{StdoutLock, Write};
+use std::io::StdoutLock;
 
 use anyhow::{Context, Ok};
 use serde::{Deserialize, Serialize};
@@ -31,10 +31,9 @@ impl Node<(), Payload> for EchoNode {
             Payload::Echo { echo } => {
                 reply.body.payload = Payload::EchoOk { echo };
 
-                serde_json::to_writer(&mut *stdout, &reply)
-                    .context("serialize response to echo_ok")?;
-
-                stdout.write_all(b"\n").context("write trailing new line")?;
+                reply
+                    .send_reply(&mut *stdout)
+                    .context("reply with echo_ok")?;
             }
             Payload::EchoOk { .. } => {}
         }

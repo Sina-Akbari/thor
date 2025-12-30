@@ -1,11 +1,8 @@
 use thor::*;
 
-use std::{
-    collections::HashMap,
-    io::{StdoutLock, Write},
-};
+use std::{collections::HashMap, io::StdoutLock};
 
-use anyhow::{Context, Ok, bail};
+use anyhow::{Context, Ok};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -48,28 +45,26 @@ impl Node<(), Payload> for BroadcastNode {
             Payload::Broadcast { message } => {
                 self.messages.push(message);
                 reply.body.payload = Payload::BroadcastOk;
-                serde_json::to_writer(&mut *stdout, &reply)
-                    .context("serialize response to broadcast_ok")?;
 
-                stdout.write_all(b"\n").context("write trailing new line")?;
+                reply
+                    .send_reply(&mut *stdout)
+                    .context("reply with broadcast_ok")?;
             }
             Payload::Read {} => {
                 reply.body.payload = Payload::ReadOk {
                     messages: self.messages.clone(),
                 };
 
-                serde_json::to_writer(&mut *stdout, &reply)
-                    .context("serialize response to read_ok")?;
-
-                stdout.write_all(b"\n").context("write trailing new line")?;
+                reply
+                    .send_reply(&mut *stdout)
+                    .context("reply with read_ok")?;
             }
             Payload::Topology { .. } => {
                 reply.body.payload = Payload::TopologyOk;
 
-                serde_json::to_writer(&mut *stdout, &reply)
-                    .context("serialize response to topology_ok")?;
-
-                stdout.write_all(b"\n").context("write trailing new line")?;
+                reply
+                    .send_reply(&mut *stdout)
+                    .context("reply with topology_ok")?;
             }
             Payload::BroadcastOk {} | Payload::ReadOk { .. } | Payload::TopologyOk => {}
         }

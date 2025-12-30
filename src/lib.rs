@@ -27,6 +27,17 @@ impl<Payload> Message<Payload> {
             },
         }
     }
+
+    pub fn send_reply(self, output: &mut impl Write) -> anyhow::Result<()>
+    where
+        Self: Serialize,
+    {
+        serde_json::to_writer(&mut *output, &self).context("serialize response")?;
+
+        output.write_all(b"\n").context("write trailing new line")?;
+
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
